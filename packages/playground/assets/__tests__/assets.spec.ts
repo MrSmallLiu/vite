@@ -6,16 +6,14 @@ import {
   isBuild,
   listAssets,
   readManifest,
-  readFile
+  readFile,
+  editFile,
+  notifyRebuildComplete
 } from '../../testUtils'
 
 const assetMatch = isBuild
   ? /\/foo\/assets\/asset\.\w{8}\.png/
   : '/foo/nested/asset.png'
-
-const outerAssetMatch = isBuild
-  ? /\/foo\/assets\/asset\.\w{8}\.png/
-  : /\/foo\/@fs\/.+?\/css\/nested\/asset\.png/
 
 const iconMatch = `/foo/icon.png`
 
@@ -68,12 +66,6 @@ describe('asset imports from js', () => {
     expect(await page.textContent('.asset-import-absolute')).toMatch(assetMatch)
   })
 
-  test('outer', async () => {
-    expect(await page.textContent('.asset-import-outer')).toMatch(
-      outerAssetMatch
-    )
-  })
-
   test('from /public', async () => {
     expect(await page.textContent('.public-import')).toMatch(iconMatch)
   })
@@ -93,14 +85,14 @@ describe('css url() references', () => {
   })
 
   test('image-set relative', async () => {
-    let imageSet = await getBg('.css-image-set-relative')
+    const imageSet = await getBg('.css-image-set-relative')
     imageSet.split(', ').forEach((s) => {
       expect(s).toMatch(assetMatch)
     })
   })
 
   test('image-set without the url() call', async () => {
-    let imageSet = await getBg('.css-image-set-without-url-call')
+    const imageSet = await getBg('.css-image-set-without-url-call')
     imageSet.split(', ').forEach((s) => {
       expect(s).toMatch(assetMatch)
     })
@@ -205,3 +197,15 @@ if (isBuild) {
     }
   })
 }
+describe('css and assets in css in build watch', () => {
+  if (isBuild) {
+    test('css will not be lost and css does not contain undefined', async () => {
+      editFile('index.html', (code) => code.replace('Assets', 'assets'), true)
+      await notifyRebuildComplete(watcher)
+      const cssFile = findAssetFile(/index\.\w+\.css$/, 'foo')
+      expect(cssFile).not.toBe('')
+      expect(cssFile).not.toMatch(/undefined/)
+      watcher?.close()
+    })
+  }
+})
